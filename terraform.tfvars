@@ -9,3 +9,5 @@ public_subnet_names = ["public_CYO1", "public_CYO2"]
 
 private_subnet_cidrs = ["10.0.1.0/24", "10.0.2.0/24"]
 private_subnet_names = ["private_CYO1", "private_CYO2"]
+ec2_ami = "ami-0dad359ff462124ca"
+ec2_instance_type = "t3.micro"

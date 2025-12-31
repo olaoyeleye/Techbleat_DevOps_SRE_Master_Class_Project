@@ -41,3 +41,14 @@ variable "private_subnet_names" {
   default     = ["private_CYO1", "private_CYO2"]
 }
 
+variable "ec2_ami" {
+  description = "AMI ID for EC2 instances"
+  type        = string
+  default     = "ami-0c7217cdde317cfec"
+}
+
+variable "ec2_instance_type" {
+  description = "Instance type for EC2 instances"
+  type        = string
+  default     = "t2.micro"
+}
