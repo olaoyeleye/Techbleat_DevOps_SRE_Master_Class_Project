@@ -42,3 +42,45 @@ output "region" {
 	description = "Region used for deployment"
 	value       = var.aws_region
 }
+
+output "nginx_public_ip" {
+	description = "Public IP address of the nginx instance"
+	value       = aws_instance.nginx.public_ip
+}
+
+output "nginx_instance_id" {
+	description = "Instance ID of the nginx server"
+	value       = aws_instance.nginx.id
+}
+
+output "postgres_public_ip" {
+	description = "Public IP address of the postgres instance"
+	value       = aws_instance.postgres[0].public_ip
+}
+
+output "postgres_instance_id" {
+	description = "Instance ID of the postgres server"
+	value       = aws_instance.postgres[0].id
+}
+
+output "postgres_password" {
+	description = "Generated postgres password for the 'postgres' user"
+	value       = random_password.postgres.result
+	sensitive   = true
+}
+
+output "jenkins_public_ip" {
+	description = "Public IP address of the jenkins instance"
+	value       = aws_instance.jenkins.public_ip
+}
+
+output "jenkins_instance_id" {
+	description = "Instance ID of the jenkins server"
+	value       = aws_instance.jenkins.id
+}
+
+output "deployer_private_key_pem" {
+	description = "Private key (PEM) for SSH access to instances - keep this secure"
+	value       = tls_private_key.deployer.private_key_pem
+	sensitive   = true
+}

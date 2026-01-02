@@ -35,10 +35,9 @@ resource "aws_internet_gateway" "main" {
 
 # Public Subnets
 resource "aws_subnet" "public" {
-    count                   = 2
+    count                   = 1
     vpc_id                  = aws_vpc.main.id
     cidr_block              = var.public_subnet_cidrs[count.index]
-    availability_zone       = data.aws_availability_zones.available.names[count.index]
     map_public_ip_on_launch = true
 
     tags = {
@@ -48,10 +47,10 @@ resource "aws_subnet" "public" {
 
 # Private Subnets
 resource "aws_subnet" "private" {
-    count             = 2
+    count             = 1
     vpc_id            = aws_vpc.main.id
     cidr_block        = var.private_subnet_cidrs[count.index]
-    availability_zone = data.aws_availability_zones.available.names[count.index]
+    # availability_zone intentionally omitted for simplicity
 
     tags = {
         Name = var.private_subnet_names[count.index]
@@ -74,7 +73,7 @@ resource "aws_route_table" "public" {
 
 # Associate Public Subnets with Route Table
 resource "aws_route_table_association" "public" {
-    count          = 2
+    count          = 1
     subnet_id      = aws_subnet.public[count.index].id
     route_table_id = aws_route_table.public.id
 }
@@ -90,7 +89,7 @@ resource "aws_route_table" "private" {
 
 # Associate Private Subnets with Route Table
 resource "aws_route_table_association" "private" {
-    count          = 2
+    count          = 1
     subnet_id      = aws_subnet.private[count.index].id
     route_table_id = aws_route_table.private.id
 }
@@ -109,10 +108,24 @@ resource "aws_security_group" "public" {
     }
 
     ingress {
+        from_port   = 80
+        to_port     = 80
+        protocol    = "tcp"
+        cidr_blocks = ["0.0.0.0/0"]
+    }
+
+    ingress {
         from_port   = 8080
         to_port     = 8080
         protocol    = "tcp"
         cidr_blocks = ["0.0.0.0/0"]
+    }
+
+    ingress {
+        from_port   = 5432
+        to_port     = 5432
+        protocol    = "tcp"
+        cidr_blocks = [var.vpc_cidr]
     }
 
     egress {
@@ -177,14 +190,25 @@ resource "aws_security_group" "internal" {
     }
 }
 
+# Generate SSH keypair for instance access
+resource "tls_private_key" "deployer" {
+    algorithm = "RSA"
+    rsa_bits  = 4096
+}
+
+resource "aws_key_pair" "deployer" {
+    key_name   = "${var.vpc_name}-deployer-key"
+    public_key = tls_private_key.deployer.public_key_openssh
+}
+
 # EC2 Instances in Public Subnet
 resource "aws_instance" "public" {
-    count           = 2
+    count           = 0
     ami             = var.ec2_ami
     instance_type   = var.ec2_instance_type
     subnet_id       = aws_subnet.public[count.index].id
-    associate_public_ip_address = true
-    vpc_security_group_ids       = [aws_security_group.public.id, aws_security_group.internal.id]
+    vpc_security_group_ids = [aws_security_group.public.id, aws_security_group.internal.id]
+    key_name        = aws_key_pair.deployer.key_name
 
     tags = {
         Name = "${var.vpc_name}-public-instance-${count.index + 1}"
@@ -193,7 +217,7 @@ resource "aws_instance" "public" {
 
 # EC2 Instances in Private Subnet
 resource "aws_instance" "private" {
-    count           = 2
+    count           = 0
     ami             = var.ec2_ami
     instance_type   = var.ec2_instance_type
     subnet_id       = aws_subnet.private[count.index].id
@@ -206,50 +230,62 @@ resource "aws_instance" "private" {
 
 # Jenkins Server in Public Subnet
 resource "aws_instance" "jenkins" {
-    ami                       = var.ec2_ami
-    instance_type             = var.ec2_instance_type
-    subnet_id                 = aws_subnet.public[0].id
-    associate_public_ip_address = true
-    vpc_security_group_ids    = [aws_security_group.public.id, aws_security_group.internal.id]
+    ami                = var.ec2_ami
+    instance_type      = var.ec2_instance_type
+    subnet_id          = aws_subnet.public[0].id
+    vpc_security_group_ids = [aws_security_group.public.id, aws_security_group.internal.id]
+    key_name              = aws_key_pair.deployer.key_name
 
-    user_data = <<-EOF
+    user_data = base64encode(<<-EOF
                 #!/bin/bash
+                set -e
                 yum update -y
-                amazon-linux-extras install java-openjdk11 -y || yum install -y java-11-openjdk
+                amazon-linux-extras install java-openjdk11 -y
                 wget -O /etc/yum.repos.d/jenkins.repo https://pkg.jenkins.io/redhat-stable/jenkins.repo
                 rpm --import https://pkg.jenkins.io/redhat-stable/jenkins.io.key
                 yum install -y jenkins
+                systemctl daemon-reload
                 systemctl enable jenkins
                 systemctl start jenkins
                 EOF
+    )
 
     tags = {
         Name = "${var.vpc_name}-jenkins"
     }
 }
 
-# Data source for availability zones
-data "aws_availability_zones" "available" {
-    state = "available"
-}
+
 
 # Postgres DB in Public Subnet
-resource "aws_instance" "postgres" {
-    ami                       = var.ec2_ami
-    instance_type             = var.ec2_instance_type
-    subnet_id                 = aws_subnet.public[1].id
-    associate_public_ip_address = true
-    vpc_security_group_ids    = [aws_security_group.public.id, aws_security_group.internal.id]
+resource "random_password" "postgres" {
+    length  = 16
+    special = true
+}
 
-    user_data = <<-EOF
-                #!/bin/bash
-                yum update -y
-                amazon-linux-extras install postgresql10 -y || yum install -y postgresql-server
-                /usr/bin/postgresql-setup initdb || :
-                systemctl enable postgresql
-                systemctl start postgresql
-                sudo -u postgres psql -c "ALTER USER postgres PASSWORD 'postgres';"
-                EOF
+resource "aws_instance" "postgres" {
+    count              = 1
+    ami                = var.ec2_ami
+    instance_type      = var.ec2_instance_type
+    subnet_id          = aws_subnet.public[0].id
+    vpc_security_group_ids = [aws_security_group.public.id, aws_security_group.internal.id]
+    key_name              = aws_key_pair.deployer.key_name
+
+    user_data = <<EOF
+#!/bin/bash
+set -e
+yum update -y
+amazon-linux-extras enable postgresql14 || true
+yum install -y postgresql-server postgresql-contrib || yum install -y postgresql-server
+/usr/bin/postgresql-setup --initdb
+sed -i "s/#listen_addresses = 'localhost'/listen_addresses = '*'/" /var/lib/pgsql/data/postgresql.conf
+cat >> /var/lib/pgsql/data/pg_hba.conf <<PGHBA
+host    all             all             ${var.vpc_cidr}         md5
+PGHBA
+systemctl enable postgresql
+systemctl start postgresql
+sudo -u postgres psql -c "ALTER USER postgres WITH PASSWORD '${random_password.postgres.result}';"
+EOF
 
     tags = {
         Name = "${var.vpc_name}-postgres"
@@ -258,23 +294,25 @@ resource "aws_instance" "postgres" {
 
 # Nginx Server in Public Subnet
 resource "aws_instance" "nginx" {
-    ami                       = var.ec2_ami
-    instance_type             = var.ec2_instance_type
-    subnet_id                 = aws_subnet.public[1].id
-    associate_public_ip_address = true
-    vpc_security_group_ids    = [aws_security_group.public.id, aws_security_group.internal.id]
+    ami                = var.ec2_ami
+    instance_type      = var.ec2_instance_type
+    subnet_id          = aws_subnet.public[0].id
+    vpc_security_group_ids = [aws_security_group.public.id, aws_security_group.internal.id]
+    key_name              = aws_key_pair.deployer.key_name
 
-    user_data = <<-EOF
-                #!/bin/bash
-                yum update -y
-                amazon-linux-extras install nginx1 -y || yum install -y nginx
-                systemctl enable nginx
-                systemctl start nginx
-                EOF
+    user_data = <<EOF
+#!/bin/bash
+yum update -y
+yum install -y nginx
+systemctl start nginx
+systemctl enable nginx
+EOF
 
     tags = {
         Name = "${var.vpc_name}-nginx"
     }
+
+    depends_on = [aws_internet_gateway.main]
 }
 
 
