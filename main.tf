@@ -285,18 +285,16 @@ user_data = <<-EOF
             sudo chmod 666 /var/run/docker.sock         
             
 
+            # Remove old version if necessary
+            #sudo yum remove aws-cli -y 
 
-            # 1. Download the kubectl binary (Linux x86-64)
-            curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+            # Install AWS CLI v2
+            curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+            unzip awscliv2.zip
+            sudo ./aws/install --update
 
-            # 2. Make it executable
-            chmod +x ./kubectl
-
-            # 3. Move it to a folder in your PATH
-            sudo mv ./kubectl /usr/local/bin/kubectl
-
-            # 4. Verify installation
-            kubectl version --client
+            # Verify it says "aws-cli/2.x.x"
+            aws --version
 
 
             echo "Waiting for Jenkins to initialize..."
