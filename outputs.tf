@@ -53,21 +53,16 @@ output "nginx_instance_id" {
 	value       = aws_instance.nginx.id
 }
 
-output "postgres_public_ip" {
-	description = "Public IP address of the postgres instance"
-	value       = aws_instance.postgres[0].public_ip
+#output "postgres_public_ip" {
+#	description = "Public IP address of the postgres instance"
+#	value       = aws_instance.postgres.public_ip
+#}
+
+output "rds_endpoint" {
+  value = aws_db_instance.postgres.endpoint
 }
 
-output "postgres_instance_id" {
-	description = "Instance ID of the postgres server"
-	value       = aws_instance.postgres[0].id
-}
 
-output "postgres_password" {
-	description = "Generated postgres password for the 'postgres' user"
-	value       = random_password.postgres.result
-	sensitive   = true
-}
 
 output "jenkins_public_ip" {
 	description = "Public IP address of the jenkins instance"

@@ -52,3 +52,8 @@ variable "ec2_instance_type" {
   type        = string
   default     = "t2.micro"
 }
+variable "db_admin_password" {
+  description = "Custom password for the postgres user"
+  type        = string
+  default     = "cccccc" # Put your password here
+}
