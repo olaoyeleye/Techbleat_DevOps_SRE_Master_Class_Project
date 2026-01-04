@@ -1,6 +1,0 @@
-create a VPC with CIDR 10.0.0.0/16 with the name CynWumOye_CYO
-create 2 private subnets on 10.0.0.1/24 and 10.0.0.2/24 with the name with private_CYO1 and private_CYO2
-create 2 public subnets on 10.0.0.3/24 and 10.0.0.4/24 with the name public_CYO1 and public_CYO2
-create the internet gateway for the public subnets and do not create NAT gateway or elastic IP
-create a split fo the values.tfvars and variables.tf
-i want the region to be in eu-west-1
