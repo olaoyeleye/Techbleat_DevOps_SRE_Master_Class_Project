@@ -129,7 +129,7 @@ resource "aws_security_group" "public" {
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
-    cidr_blocks = [var.vpc_cidr]
+    cidr_blocks = [0.0.0.0/0]
   }
   ingress {
     from_port   = 5432
@@ -357,7 +357,7 @@ resource "aws_db_instance" "postgres" {
   username               = "postgres"
   password               = var.db_admin_password
   db_subnet_group_name   = aws_db_subnet_group.postgres.name
-  vpc_security_group_ids = [aws_security_group.private.id] # Reuse your private SG
+  vpc_security_group_ids = [aws_security_group.private.id, aws_security_group.internal.id] # Reuse your private SG
 
   db_name             = "cynwumoye_DB"
   skip_final_snapshot = true  # Set to false for production to keep backups
@@ -515,5 +515,5 @@ resource "aws_security_group_rule" "allow_nodeport" {
   to_port           = 32000
   protocol          = "tcp"
   security_group_id = aws_eks_cluster.main.vpc_config[0].cluster_security_group_id
-  cidr_blocks       = ["0.0.0.0/0"] # Or ideally just your Jenkins/VPC CIDR
+  cidr_blocks       = ["10.0.0.0/16"] # Or ideally just your Jenkins/VPC CIDR
 }
