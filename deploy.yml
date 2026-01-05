@@ -1,0 +1,34 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fruits-veg-market
+  namespace: cynwumoye
+spec:
+  replicas: 1  # Number of replicas
+  selector:
+    matchLabels:
+      app: fruits-veg-market
+      env: dev
+  template:
+    metadata:
+      labels:
+        app: fruits-veg-market
+        env: dev
+    spec:
+      containers:
+        - name: fruits-veg-market
+          image: var_img:VERSION_AUTO_REPLACE  
+          ports:
+            - containerPort: 8000
+          resources:
+            limits:
+              memory: 128Mi
+#          volumeMounts:
+#            - name: config
+#              mountPath: "/config"
+#              readOnly: true
+#      volumes:
+#        - name: config
+#          configMap:
+#            name: fruits-veg-market-dev-env

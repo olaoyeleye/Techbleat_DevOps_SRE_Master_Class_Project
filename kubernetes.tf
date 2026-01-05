@@ -8,8 +8,8 @@ resource "aws_iam_role" "eks_cluster" {
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Action = "sts:AssumeRole"
-      Effect = "Allow"
+      Action    = "sts:AssumeRole"
+      Effect    = "Allow"
       Principal = { Service = "eks.amazonaws.com" }
     }]
   })
@@ -20,6 +20,10 @@ resource "aws_iam_role_policy_attachment" "eks_cluster_policy" {
   role       = aws_iam_role.eks_cluster.name
 }
 
+resource "aws_iam_role_policy_attachment" "eks_elb_full_access" {
+  policy_arn = "arn:aws:iam::aws:policy/ElasticLoadBalancingFullAccess"
+  role       = aws_iam_role.eks_nodes.name
+}
 # Node Group Role
 resource "aws_iam_role" "eks_nodes" {
   name = "${var.vpc_name}-eks-node-role"
@@ -27,8 +31,8 @@ resource "aws_iam_role" "eks_nodes" {
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Action = "sts:AssumeRole"
-      Effect = "Allow"
+      Action    = "sts:AssumeRole"
+      Effect    = "Allow"
       Principal = { Service = "ec2.amazonaws.com" }
     }]
   })
@@ -65,20 +69,21 @@ resource "aws_eks_node_group" "main" {
   cluster_name    = aws_eks_cluster.main.name
   node_group_name = "main-nodes"
   node_role_arn   = aws_iam_role.eks_nodes.arn
-  subnet_ids      = aws_subnet.public[*].id
+  subnet_ids      = aws_subnet.private[*].id
 
   scaling_config {
     desired_size = 2
-    max_size     = 2
-    min_size     = 1
+    max_size     = 3
+    min_size     = 2
   }
 
-  instance_types = ["t3.micro"] # EKS nodes usually need more RAM than t2.micro
+  instance_types = ["t3.small"] # EKS nodes usually need more RAM than t2.micro
 
   depends_on = [
     aws_iam_role_policy_attachment.eks_worker_node_policy,
     aws_iam_role_policy_attachment.eks_cni_policy,
     aws_iam_role_policy_attachment.eks_registry_policy,
+    aws_route.private_nat # <--- CRITICAL: Wait for internet access
   ]
 }
 
@@ -106,4 +111,14 @@ resource "aws_route" "private_nat" {
   route_table_id         = aws_route_table.private.id
   destination_cidr_block = "0.0.0.0/0"
   nat_gateway_id         = aws_nat_gateway.main.id
+}
+
+# Allow EKS Nodes to access PostgreSQL RDS
+resource "aws_security_group_rule" "allow_eks_to_rds" {
+  type                     = "ingress"
+  from_port                = 5432
+  to_port                  = 5432
+  protocol                 = "tcp"
+  security_group_id        = aws_security_group.private.id # The RDS SG
+  source_security_group_id = aws_eks_cluster.main.vpc_config[0].cluster_security_group_id
 }

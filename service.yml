@@ -1,0 +1,19 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: fruits-veg-market
+  namespace: cynwumoye
+  annotations:
+    # This tells AWS to use a modern Network Load Balancer
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+spec:
+  selector:
+    app: fruits-veg-market
+    env: dev
+  type: NodePort
+  ports:
+    - port: 80
+      targetPort: 8000
+      nodePort: 32000 # Choose a port between 30000-32767
+  

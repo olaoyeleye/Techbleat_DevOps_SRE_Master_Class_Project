@@ -1,49 +1,49 @@
 # main.tf
 
 terraform {
-    required_providers {
-        aws = {
-            source  = "hashicorp/aws"
-            version = "~> 5.0"
-        }
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
     }
+  }
 }
 
 provider "aws" {
-    region = var.aws_region
+  region = var.aws_region
 }
 
 # VPC
 resource "aws_vpc" "main" {
-    cidr_block           = var.vpc_cidr
-    enable_dns_hostnames = true
-    enable_dns_support   = true
+  cidr_block           = var.vpc_cidr
+  enable_dns_hostnames = true
+  enable_dns_support   = true
 
-    tags = {
-        Name = var.vpc_name
-    }
+  tags = {
+    Name = var.vpc_name
+  }
 }
 
 # Internet Gateway
 resource "aws_internet_gateway" "main" {
-    vpc_id = aws_vpc.main.id
+  vpc_id = aws_vpc.main.id
 
-    tags = {
-        Name = "${var.vpc_name}-igw"
-    }
+  tags = {
+    Name = "${var.vpc_name}-igw"
+  }
 }
 # Updated Public Subnets (Changed count to 2)
 resource "aws_subnet" "public" {
-  count                   = 2
-  vpc_id                  = aws_vpc.main.id
-  cidr_block              = var.public_subnet_cidrs[count.index]
+  count      = 2
+  vpc_id     = aws_vpc.main.id
+  cidr_block = var.public_subnet_cidrs[count.index]
   # This picks a different AZ for each subnet:
   availability_zone       = data.aws_availability_zones.available.names[count.index]
   map_public_ip_on_launch = true
 
   tags = {
-    Name                                        = "${var.vpc_name}-public-${count.index}"
-    "kubernetes.io/role/elb"                    = "1"        # Required for Public LBs
+    Name                                            = "${var.vpc_name}-public-${count.index}"
+    "kubernetes.io/role/elb"                        = "1" # Required for Public LBs
     "kubernetes.io/cluster/${var.vpc_name}-cluster" = "shared"
   }
 }
@@ -56,209 +56,214 @@ resource "aws_subnet" "private" {
   availability_zone = data.aws_availability_zones.available.names[count.index]
 
   tags = {
-    Name                                        = "${var.vpc_name}-private-${count.index}"
-    "kubernetes.io/role/internal-elb"           = "1"        # Required for Private LBs
+    Name                                            = "${var.vpc_name}-private-${count.index}"
+    "kubernetes.io/role/internal-elb"               = "1" # Required for Private LBs
     "kubernetes.io/cluster/${var.vpc_name}-cluster" = "shared"
   }
 }
 # Route Table for Public Subnets
 resource "aws_route_table" "public" {
-    vpc_id = aws_vpc.main.id
+  vpc_id = aws_vpc.main.id
 
-    route {
-        cidr_block = "0.0.0.0/0"
-        gateway_id = aws_internet_gateway.main.id
-    }
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.main.id
+  }
 
-    tags = {
-        Name = "${var.vpc_name}-public-rt"
-    }
+  tags = {
+    Name = "${var.vpc_name}-public-rt"
+  }
 }
 
 # Associate Public Subnets with Route Table
 resource "aws_route_table_association" "public" {
-    count          = 1
-    subnet_id      = aws_subnet.public[count.index].id
-    route_table_id = aws_route_table.public.id
+  count          = 2
+  subnet_id      = aws_subnet.public[count.index].id
+  route_table_id = aws_route_table.public.id
 }
 
 # Route Table for Private Subnets
 resource "aws_route_table" "private" {
-    vpc_id = aws_vpc.main.id
+  vpc_id = aws_vpc.main.id
 
-    tags = {
-        Name = "${var.vpc_name}-private-rt"
-    }
+  tags = {
+    Name = "${var.vpc_name}-private-rt"
+  }
 }
 
 # Associate Private Subnets with Route Table
 resource "aws_route_table_association" "private" {
-    count          = 1
-    subnet_id      = aws_subnet.private[count.index].id
-    route_table_id = aws_route_table.private.id
+  count          = 2
+  subnet_id      = aws_subnet.private[count.index].id
+  route_table_id = aws_route_table.private.id
 }
 
 # Security Group for Public Instances
 resource "aws_security_group" "public" {
-    name        = "${var.vpc_name}-public-sg"
-    description = "Security group for public instances"
-    vpc_id      = aws_vpc.main.id
+  name        = "${var.vpc_name}-public-sg"
+  description = "Security group for public instances"
+  vpc_id      = aws_vpc.main.id
 
-    ingress {
-        from_port   = 22
-        to_port     = 22
-        protocol    = "tcp"
-        cidr_blocks = ["0.0.0.0/0"]
-    }
+  ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
 
-    ingress {
-        from_port   = 80
-        to_port     = 80
-        protocol    = "tcp"
-        cidr_blocks = ["0.0.0.0/0"]
-    }
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
 
-    ingress {
-        from_port   = 8080
-        to_port     = 8080
-        protocol    = "tcp"
-        cidr_blocks = ["0.0.0.0/0"]
-    }
+  ingress {
+    from_port   = 8080
+    to_port     = 8080
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
 
-    ingress {
-        from_port   = 5432
-        to_port     = 5432
-        protocol    = "tcp"
-        cidr_blocks = [var.vpc_cidr]
-    }
+  ingress {
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = [var.vpc_cidr]
+  }
+  ingress {
+    from_port   = 5432
+    to_port     = 5432
+    protocol    = "tcp"
+    cidr_blocks = [var.vpc_cidr]
+  }
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
 
-    egress {
-        from_port   = 0
-        to_port     = 0
-        protocol    = "-1"
-        cidr_blocks = ["0.0.0.0/0"]
-    }
-
-    tags = {
-        Name = "${var.vpc_name}-public-sg"
-    }
+  tags = {
+    Name = "${var.vpc_name}-public-sg"
+  }
 }
 
 # Security Group for Private Instances
 resource "aws_security_group" "private" {
-    name        = "${var.vpc_name}-private-sg"
-    description = "Security group for private instances"
-    vpc_id      = aws_vpc.main.id
+  name        = "${var.vpc_name}-private-sg"
+  description = "Security group for private instances"
+  vpc_id      = aws_vpc.main.id
 
-    ingress {
-        from_port   = 22
-        to_port     = 22
-        protocol    = "tcp"
-        cidr_blocks = [var.vpc_cidr]
-    }
+  ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = [var.vpc_cidr]
+  }
 
-    egress {
-        from_port   = 0
-        to_port     = 0
-        protocol    = "-1"
-        cidr_blocks = ["0.0.0.0/0"]
-    }
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
 
-    tags = {
-        Name = "${var.vpc_name}-private-sg"
-    }
+  tags = {
+    Name = "${var.vpc_name}-private-sg"
+  }
 }
 
 # Internal Security Group for inter-instance communication
 resource "aws_security_group" "internal" {
-    name        = "${var.vpc_name}-internal-sg"
-    description = "Allows internal communication within the VPC"
-    vpc_id      = aws_vpc.main.id
+  name        = "${var.vpc_name}-internal-sg"
+  description = "Allows internal communication within the VPC"
+  vpc_id      = aws_vpc.main.id
 
-    ingress {
-        from_port   = 0
-        to_port     = 0
-        protocol    = "-1"
-        cidr_blocks = [var.vpc_cidr]
-    }
+  ingress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = [var.vpc_cidr]
+  }
 
-    egress {
-        from_port   = 0
-        to_port     = 0
-        protocol    = "-1"
-        cidr_blocks = ["0.0.0.0/0"]
-    }
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
 
-    tags = {
-        Name = "${var.vpc_name}-internal-sg"
-    }
+  tags = {
+    Name = "${var.vpc_name}-internal-sg"
+  }
 }
 
 # Generate SSH keypair for instance access
 resource "tls_private_key" "deployer" {
-    algorithm = "RSA"
-    rsa_bits  = 4096
+  algorithm = "RSA"
+  rsa_bits  = 4096
 }
 
 resource "aws_key_pair" "deployer" {
-    key_name   = "${var.vpc_name}-deployer-key"
-    public_key = tls_private_key.deployer.public_key_openssh
+  key_name   = "${var.vpc_name}-deployer-key"
+  public_key = tls_private_key.deployer.public_key_openssh
 }
 
 # EC2 Instances in Public Subnet
 resource "aws_instance" "public" {
-    count           = 0
-    ami             = var.ec2_ami
-    instance_type   = var.ec2_instance_type
-    subnet_id       = aws_subnet.public[count.index].id
-    vpc_security_group_ids = [aws_security_group.public.id, aws_security_group.internal.id]
-    key_name        = aws_key_pair.deployer.key_name
+  count                  = 0
+  ami                    = var.ec2_ami
+  instance_type          = var.ec2_instance_type
+  subnet_id              = aws_subnet.public[count.index].id
+  vpc_security_group_ids = [aws_security_group.public.id, aws_security_group.internal.id]
+  key_name               = aws_key_pair.deployer.key_name
 
-    tags = {
-        Name = "${var.vpc_name}-public-instance-${count.index + 1}"
-    }
+  tags = {
+    Name = "${var.vpc_name}-public-instance-${count.index + 1}"
+  }
 }
 
 # EC2 Instances in Private Subnet
 resource "aws_instance" "private" {
-    count           = 0
-    ami             = var.ec2_ami
-    instance_type   = var.ec2_instance_type
-    subnet_id       = aws_subnet.private[count.index].id
-    vpc_security_group_ids = [aws_security_group.private.id, aws_security_group.internal.id]
+  count                  = 0
+  ami                    = var.ec2_ami
+  instance_type          = var.ec2_instance_type
+  subnet_id              = aws_subnet.private[count.index].id
+  vpc_security_group_ids = [aws_security_group.private.id, aws_security_group.internal.id]
 
-    tags = {
-        Name = "${var.vpc_name}-private-instance-${count.index + 1}"
-    }
+  tags = {
+    Name = "${var.vpc_name}-private-instance-${count.index + 1}"
+  }
 }
 
 # Data source to get the latest Amazon Linux 2 AMI
 data "aws_ami" "amazon_linux_2" {
-    most_recent = true
-    owners      = ["amazon"]
+  most_recent = true
+  owners      = ["amazon"]
 
-    filter {
-        name   = "name"
-        values = ["amzn2-ami-hvm-*-x86_64-gp2"]
-    }
+  filter {
+    name   = "name"
+    values = ["amzn2-ami-hvm-*-x86_64-gp2"]
+  }
 
-    filter {
-        name   = "virtualization-type"
-        values = ["hvm"]
-    }
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
 }
 
 # Jenkins Server in Public Subnet
 resource "aws_instance" "jenkins" {
-    ami                         = data.aws_ami.amazon_linux_2.id
-    instance_type               = var.ec2_instance_type
-    subnet_id                   = aws_subnet.public[0].id
-    vpc_security_group_ids      = [aws_security_group.public.id, aws_security_group.internal.id]
-    key_name                    = aws_key_pair.deployer.key_name
-    associate_public_ip_address = true
+  ami                         = data.aws_ami.amazon_linux_2.id
+  instance_type               = var.ec2_instance_type
+  subnet_id                   = aws_subnet.public[0].id
+  vpc_security_group_ids      = [aws_security_group.public.id, aws_security_group.internal.id]
+  key_name                    = aws_key_pair.deployer.key_name
+  associate_public_ip_address = true
 
- 
-user_data = <<-EOF
+
+  user_data = <<-EOF
             #!/bin/bash
             set -x
             exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
@@ -295,7 +300,15 @@ user_data = <<-EOF
 
             # Verify it says "aws-cli/2.x.x"
             aws --version
+            # 2. Install kubectl
+            K8S_VERSION=$(curl -L -s https://dl.k8s.io/release/stable.txt)
+            curl -LO "https://dl.k8s.io/release/$K8S_VERSION/bin/linux/amd64/kubectl"
+            chmod +x ./kubectl
+            mv ./kubectl /usr/local/bin/kubectl
 
+            # 3. Add Jenkins to Docker group (if not already done)
+            usermod -aG docker jenkins
+            systemctl restart jenkins
 
             echo "Waiting for Jenkins to initialize..."
             for i in {1..60}; do
@@ -316,11 +329,11 @@ user_data = <<-EOF
             echo "Jenkins installation completed!"
             EOF
 
-    tags = {
-        Name = "${var.vpc_name}-jenkins"
-    }
+  tags = {
+    Name = "${var.vpc_name}-jenkins"
+  }
 
-    depends_on = [aws_internet_gateway.main]
+  depends_on = [aws_internet_gateway.main]
 }
 
 
@@ -336,19 +349,19 @@ resource "aws_db_subnet_group" "postgres" {
 
 # 2. Create the PaaS Postgres Instance (RDS)
 resource "aws_db_instance" "postgres" {
-  identifier            = "cynwumoye-cyo-db"
-  instance_class        = "db.t3.micro" # Free Tier eligible
-  allocated_storage     = 20
-  engine                = "postgres"
-  engine_version        = "14" # Matches your previous version
-  username              = "postgres"
-  password              = var.db_admin_password
-  db_subnet_group_name  = aws_db_subnet_group.postgres.name
+  identifier             = "cynwumoye-cyo-db"
+  instance_class         = "db.t3.micro" # Free Tier eligible
+  allocated_storage      = 20
+  engine                 = "postgres"
+  engine_version         = "14" # Matches your previous version
+  username               = "postgres"
+  password               = var.db_admin_password
+  db_subnet_group_name   = aws_db_subnet_group.postgres.name
   vpc_security_group_ids = [aws_security_group.private.id] # Reuse your private SG
-  
-  db_name               = "cynwumoye_DB"
-  skip_final_snapshot   = true # Set to false for production to keep backups
-  publicly_accessible   = false # Keeps it secure inside the VPC
+
+  db_name             = "cynwumoye_DB"
+  skip_final_snapshot = true  # Set to false for production to keep backups
+  publicly_accessible = false # Keeps it secure inside the VPC
 
   tags = {
     Name = "${var.vpc_name}-postgres-rds"
@@ -357,14 +370,14 @@ resource "aws_db_instance" "postgres" {
 
 # Nginx Server in Public Subnet
 resource "aws_instance" "nginx" {
-    ami                         = data.aws_ami.amazon_linux_2.id
-    instance_type               = var.ec2_instance_type
-    subnet_id                   = aws_subnet.public[0].id
-    vpc_security_group_ids      = [aws_security_group.public.id, aws_security_group.internal.id]
-    key_name                    = aws_key_pair.deployer.key_name
-    associate_public_ip_address = true
+  ami                         = data.aws_ami.amazon_linux_2.id
+  instance_type               = var.ec2_instance_type
+  subnet_id                   = aws_subnet.public[0].id
+  vpc_security_group_ids      = [aws_security_group.public.id, aws_security_group.internal.id]
+  key_name                    = aws_key_pair.deployer.key_name
+  associate_public_ip_address = true
 
-    user_data = <<-EOF
+  user_data = <<-EOF
                 #!/bin/bash
                 exec > >(tee /var/log/user-data.log)
                 exec 2>&1
@@ -435,21 +448,22 @@ resource "aws_instance" "nginx" {
                 echo "Nginx installation completed!"
                 EOF
 
-    tags = {
-        Name = "${var.vpc_name}-nginx"
-    }
+  tags = {
+    Name = "${var.vpc_name}-nginx"
+  }
 
-    depends_on = [aws_internet_gateway.main]
+  depends_on = [aws_internet_gateway.main]
 }
 
 resource "aws_instance" "backend_server" {
+  count=0
   ami                         = data.aws_ami.amazon_linux_2.id
   instance_type               = var.ec2_instance_type
   subnet_id                   = aws_subnet.private[0].id
   vpc_security_group_ids      = [aws_security_group.private.id, aws_security_group.internal.id]
   key_name                    = aws_key_pair.deployer.key_name
   associate_public_ip_address = true
-user_data = <<-EOF
+  user_data                   = <<-EOF
               #!/bin/bash
               # Log output to check for errors later
               exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
@@ -493,4 +507,13 @@ INNER_EOF
   }
 
   depends_on = [aws_internet_gateway.main]
+}
+
+resource "aws_security_group_rule" "allow_nodeport" {
+  type              = "ingress"
+  from_port         = 32000
+  to_port           = 32000
+  protocol          = "tcp"
+  security_group_id = aws_eks_cluster.main.vpc_config[0].cluster_security_group_id
+  cidr_blocks       = ["0.0.0.0/0"] # Or ideally just your Jenkins/VPC CIDR
 }

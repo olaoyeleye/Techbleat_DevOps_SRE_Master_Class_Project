@@ -1,0 +1,20 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: fruits-veg-market
+  namespace: cynwumoye
+  annotations:
+    konghq.com/strip-path: "true"
+spec:
+  ingressClassName: kong   
+  rules:
+  - host:   
+    http:
+      paths:
+      - path: /fruits-veg-market
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: fruits-veg-market
+            port: 
+              number: 80
